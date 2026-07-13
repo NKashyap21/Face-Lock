@@ -11,7 +11,7 @@ from helpers import (
     capture_frames,
     get_averaged_embedding,
     load_reference_centroid,
-    # promote_inference_to_reference,  # uncomment when ready to enable
+    check_liveness
 )
 
 
@@ -25,6 +25,12 @@ def authenticate():
         print(f"{label}: capturing {FRAMES_PER_ATTEMPT} frames...")
 
         frames = capture_frames(FRAMES_PER_ATTEMPT, INFERENCE_DIR)
+        
+        if not check_liveness(frames):
+            print("Liveness check failed — no blink detected. Possible spoofing attempt.")
+            attempt += 1
+            continue
+
         inf_emb = get_averaged_embedding(frames, min_valid=MIN_VALID_DETECTIONS)
 
         if inf_emb is None:
@@ -39,7 +45,7 @@ def authenticate():
 
         if sim > THRESHOLD + AMBIGUOUS_MARGIN:
             print("Allow")
-            # promote_inference_to_reference()  # enable when ready
+        
             return True
 
         elif sim < THRESHOLD - AMBIGUOUS_MARGIN or is_last_attempt:

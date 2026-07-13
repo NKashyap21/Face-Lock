@@ -8,6 +8,17 @@ from helpers import (
     get_averaged_embedding,
 )
 
+import os
+import glob
+from helpers import (
+    REFERENCE_DIR,
+    FRAMES_PER_ATTEMPT,
+    clear_dir,
+    capture_frames,
+    get_averaged_embedding,
+    check_liveness,
+)
+
 
 def enroll():
     ref_files = glob.glob(os.path.join(REFERENCE_DIR, "*"))
@@ -33,8 +44,14 @@ def enroll():
     if mode == "replace":
         clear_dir(REFERENCE_DIR)
 
-    print(f"Capturing {FRAMES_PER_ATTEMPT} enrollment frames...")
+    print(f"Capturing {FRAMES_PER_ATTEMPT} enrollment frames... please blink naturally.")
     frames = capture_frames(FRAMES_PER_ATTEMPT, REFERENCE_DIR)
+
+    if not check_liveness(frames):
+        print("Enrollment failed — no blink detected. Please try again with a live face.")
+        for f in glob.glob(os.path.join(REFERENCE_DIR, "capture_*")):
+            os.remove(f)
+        return False
 
     valid_emb = get_averaged_embedding(frames, min_valid=1)
     if valid_emb is None:
