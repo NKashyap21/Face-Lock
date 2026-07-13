@@ -14,7 +14,6 @@ from mediapipe.tasks.python import vision as mp_vision
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 REFERENCE_DIR = "test/referance"
-INFERENCE_DIR = "test/inference"
 
 THRESHOLD = 0.6
 AMBIGUOUS_MARGIN = 0.05
