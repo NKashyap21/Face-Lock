@@ -38,14 +38,13 @@ def clear_dir(path):
         os.remove(f)
 
 
-def capture_frames(num_frames, save_dir):
+def capture_frames(num_frames):
     """Capture frames from webcam, save to save_dir, return list of PIL Images."""
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("Could not open webcam")
 
     frames = []
-    os.makedirs(save_dir, exist_ok=True)
     count = 0
     while count < num_frames:
         ret, frame = cap.read()
@@ -54,9 +53,6 @@ def capture_frames(num_frames, save_dir):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb)
         frames.append(img)
-
-        timestamp = int(time.time() * 1000)
-        img.save(os.path.join(save_dir, f"capture_{timestamp}.jpg"))
 
         count += 1
         time.sleep(0.2)
@@ -95,15 +91,14 @@ def load_reference_centroid():
         raise RuntimeError("Could not extract any valid face from reference images")
     return ref_emb
 
-
-def promote_inference_to_reference():
-    """After a successful authentication, replace reference images with the
-    latest inference captures (keeps enrollment fresh over time)."""
-    clear_dir(REFERENCE_DIR)
-    for f in glob.glob(os.path.join(INFERENCE_DIR, "*")):
-        shutil.copy(f, REFERENCE_DIR)
-    print("Reference images updated with latest successful authentication captures.")
-
+def load_reference_embedding():
+    if os.path.exists(f"{REFERENCE_DIR}/referance.pt"):
+        vector = torch.load(os.path.join(REFERENCE_DIR,"referance.pt"),map_location="cpu")
+    else:
+        raise RuntimeError(f"No reference embeddings found in {REFERENCE_DIR}")
+    
+    return vector
+    
 
 # 6-point eye landmark indices from mediapipe's 468-point Face Mesh
 # Order matches dlib's EAR convention: [left_corner, top1, top2, right_corner, bottom1, bottom2]

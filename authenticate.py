@@ -1,7 +1,6 @@
 from torch.nn.functional import cosine_similarity
 from helpers import (
     DEVICE,
-    INFERENCE_DIR,
     THRESHOLD,
     AMBIGUOUS_MARGIN,
     MAX_RESCANS,
@@ -10,21 +9,20 @@ from helpers import (
     clear_dir,
     capture_frames,
     get_averaged_embedding,
-    load_reference_centroid,
+    load_reference_embedding,
     check_liveness
 )
 
 
 def authenticate():
-    ref_centroid = load_reference_centroid()
+    ref_centroid = load_reference_embedding()
 
     attempt = 0
     while attempt <= MAX_RESCANS:
-        clear_dir(INFERENCE_DIR)
         label = "Initial scan" if attempt == 0 else f"Rescan {attempt}"
         print(f"{label}: capturing {FRAMES_PER_ATTEMPT} frames...")
 
-        frames = capture_frames(FRAMES_PER_ATTEMPT, INFERENCE_DIR)
+        frames = capture_frames(FRAMES_PER_ATTEMPT)
         
         if not check_liveness(frames):
             print("Liveness check failed — no blink detected. Possible spoofing attempt.")
