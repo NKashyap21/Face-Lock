@@ -1,5 +1,9 @@
 # FaceLock 
 
+<p align="center">
+  <img src="demo.gif" alt="FaceLock Demo" width="800">
+</p>
+
 A Linux facial authentication system built using **FaceNet**, **MTCNN**, **MediaPipe**, and the **Linux PAM (Pluggable Authentication Modules)** framework.
 
 FaceLock provides secure biometric authentication through facial recognition with blink-based liveness detection and integrates directly into the Linux desktop login process.
