@@ -1,139 +1,228 @@
-# FaceLock
+# FaceLock 
 
-A face authentication system for Linux, built end-to-end: webcam capture → face detection & alignment → embedding extraction → liveness verification → identity matching.
+A Linux facial authentication system built using **FaceNet**, **MTCNN**, **MediaPipe**, and the **Linux PAM (Pluggable Authentication Modules)** framework.
 
----
-
-## Problem Statement
-
-Most personal face-auth tutorials stop at "detect a face and compare embeddings." FaceLock goes further by treating this as a full system with the failure modes that matter in practice: ambiguous match scores, unreliable single-shot captures, and the fact that a bare embedding comparison can be fooled by a photo held up to the camera. The goal was to understand and build every non-trivial component of that pipeline, not just wire together a demo.
+FaceLock provides secure biometric authentication through facial recognition with blink-based liveness detection and integrates directly into the Linux desktop login process.
 
 ---
 
-## Architecture
+## Features
+
+- Face verification using FaceNet (InceptionResnetV1)
+- Face detection and alignment using MTCNN
+- Blink-based liveness detection using MediaPipe Face Landmarker
+- Multi-frame embedding aggregation for improved robustness
+- Linux CLI built with Typer
+- Integrated with Linux PAM for desktop authentication
+- Password fallback on failed authentication
+- Structured logging
+- Built-in performance benchmarking
+
+---
+
+## Authentication Pipeline
 
 ```
-                    Webcam
-                       │
-                       ▼
-              Frame Capture (OpenCV)
-                       │
-                       ▼
-        ┌──────────────┴──────────────┐
-        ▼                             ▼
-   Liveness Check                Face Detection & Alignment
-  (MediaPipe FaceLandmarker            (MTCNN)
-   + Eye Aspect Ratio)                     │
-        │                                  ▼
-        │                          Embedding Extraction
-        │                        (InceptionResnetV1, vggface2)
-        │                                  │
-        └──────────────┬───────────────────┘
-                        ▼
-              Cosine Similarity vs.
-              Reference Centroid
-                        │
-          ┌─────────────┼─────────────┐
-          ▼              ▼             ▼
-       Allow         Ambiguous      Rejected
-                    (rescan, up
-                     to max retries)
+                Webcam
+                   │
+                   ▼
+         Capture 20 RGB Frames
+                   │
+        ┌──────────┴──────────┐
+        ▼                     ▼
+ MediaPipe             MTCNN + FaceNet
+Liveness Check          Face Embeddings
+        │                     │
+        └──────────┬──────────┘
+                   ▼
+        Average Face Embedding
+                   │
+                   ▼
+        Cosine Similarity Match
+                   │
+         ┌─────────┴─────────┐
+         │                   │
+     Match Found        Authentication Failed
+         │                   │
+         ▼                   ▼
+ Linux PAM Success      Password Fallback
 ```
-
-Liveness and identity checks run independently on the same set of captured frames. Both must pass — a genuine blink pattern **and** a similarity score above threshold — before authentication succeeds.
 
 ---
 
-## Components
+## Linux PAM Integration
 
-| Component | Library | Purpose |
-|---|---|---|
-| Frame capture | OpenCV (`cv2.VideoCapture`) | Grabs a burst of frames from the webcam per attempt |
-| Face detection & alignment | `facenet-pytorch` (MTCNN) | Finds the face, aligns it using 5-point landmarks before embedding |
-| Face embedding | `facenet-pytorch` (InceptionResnetV1, pretrained on VGGFace2) | Produces a 512-dimensional identity vector per face |
-| Liveness detection | `mediapipe` (FaceLandmarker task) | Extracts eye contour landmarks; computes Eye Aspect Ratio (EAR) to detect a genuine blink |
-| Similarity scoring | PyTorch (`cosine_similarity`) | Compares live embedding(s) against a stored reference centroid |
+FaceLock exposes a simple CLI:
+
+```bash
+facelock verify
+```
+
+The command returns:
+
+| Exit Code | Meaning |
+|-----------|---------|
+| `0` | Authentication successful |
+| Non-zero | Authentication failed |
+
+The Linux PAM framework executes FaceLock using `pam_exec.so` during authentication.
+
+```
+User
+ │
+ ▼
+Plasma Login
+ │
+ ▼
+PAM
+ │
+ ▼
+pam_exec.so
+ │
+ ▼
+FaceLock CLI
+ │
+ ▼
+Face Verification
+ │
+ ▼
+Exit Code
+ │
+ ├── 0 → Login Successful
+ └── 1 → Password Authentication
+```
+
+Authentication is initiated when the user starts the login process (e.g., pressing **Enter** on the Plasma Login screen).
+
+---
+
+## Liveness Detection
+
+FaceLock performs blink-based liveness detection before facial verification.
+
+For every captured frame:
+
+- Detect facial landmarks using MediaPipe
+- Compute Eye Aspect Ratio (EAR)
+- Detect a valid blink sequence
+- Reject authentication if liveness verification fails
+
+This helps mitigate simple presentation attacks using photographs.
+
+---
+
+## Multi-frame Recognition
+
+Instead of authenticating using a single image, FaceLock:
+
+1. Captures multiple frames
+2. Generates a FaceNet embedding for each frame
+3. Computes the average embedding
+4. Compares against the enrolled reference embedding
+
+This significantly improves robustness under:
+
+- Lighting variation
+- Minor pose changes
+- Camera noise
+- Facial expression changes
+
+---
+
+## Performance
+
+Typical authentication timings on an Intel Core Ultra laptop:
+
+| Stage | Time |
+|--------|------|
+| Reference embedding loading | ~0.002 s |
+| Camera capture | ~4.36 s |
+| Liveness detection | ~0.38–0.80 s |
+| Face embedding generation | ~1.1–3.3 s |
+| Cosine similarity | <1 ms |
+| Total authentication | ~5.9–8.4 s |
+
+---
+
+## CLI
+
+Enroll a new user:
+
+```bash
+facelock enroll
+```
+
+Verify identity:
+
+```bash
+facelock verify
+```
+
 
 ---
 
 ## Project Structure
 
 ```
-FaceLock/
-├── test/
-│   ├── referance/       # enrolled reference images
-│   └── inference/       # temporary captures during authentication
+facelock/
+│
+├── cli.py
+├── authenticate.py
+├── enroll.py
+├── camera.py
+├── embeddings.py
+├── liveness.py
+├── storage.py
+├── config.py
+│
 ├── models/
-│   └── face_landmarker.task   # MediaPipe model (not committed — see Setup)
-├── helpers.py           # shared config, models, capture/embedding/liveness functions
-├── enroll.py            # enrollment flow (replace/add/cancel existing reference)
-├── authenticate.py       # authentication flow with liveness + identity gates
-└── README.md
+│   └── face_landmarker.task
+│
+└── storage/
 ```
 
 ---
 
-## Setup
+## Technologies
 
-**1. Install dependencies**
-```bash
-uv sync
-```
-
-**2. Download the MediaPipe Face Landmarker model** (not committed to the repo — see `.gitignore`)
-```bash
-mkdir -p models
-curl -L -o models/face_landmarker.task https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
-```
-
-**3. Confirm webcam access**
-```bash
-ls /dev/video*
-```
-If you hit a permissions error, add your user to the `video` group and re-login:
-```bash
-sudo usermod -aG video $USER
-```
-
-**4. Enroll a reference identity**
-```bash
-python enroll.py
-```
-Follow the prompt — blink naturally during capture. A live blink is required; enrollment rejects static-photo captures.
-
-**5. Authenticate**
-```bash
-python authenticate.py
-```
+- Python
+- PyTorch
+- FaceNet (InceptionResnetV1)
+- MTCNN
+- MediaPipe Face Landmarker
+- OpenCV
+- Typer
+- Linux PAM
+- NumPy
 
 ---
 
-## Calibration
+## Future Improvements
 
-Thresholds below were tuned empirically against real test data, not textbook defaults:
-
-- **Similarity threshold: 0.6** — validated against sibling-vs-self and celebrity-pair test cases (genuine matches landed 0.85–0.89; impostor/sibling matches landed 0.12–0.52).
-- **Ambiguous margin: ±0.05** — scores within this band of the threshold trigger a rescan rather than an outright allow/reject.
-- **Max rescans: 2** — after this, the last result stands as final (no infinite retry loop).
-- **EAR threshold: 0.25** — open-eye EAR typically sits ~0.27–0.30; genuine blinks dip to ~0.20–0.24 based on personal calibration testing.
-- **Frames per attempt: 20** — increased from an initial 5 after testing showed too few frames unreliably captured a natural blink within the capture window.
-
-If you re-run calibration on your own hardware/lighting, log the actual score distributions rather than trusting these numbers blindly — they're specific to the conditions they were tuned under.
+- Persistent authentication daemon (`facelockd`) to eliminate model loading latency
+- Multi-user enrollment
+- Configurable authentication thresholds
+- Automatic benchmark mode
+- Wayland lock screen integration
+- Support for ArcFace / InsightFace backends
 
 ---
 
+## Motivation
 
-## Known Limitations (v1)
+FaceLock was developed to explore the intersection of:
 
-- **Liveness detection defeats still-photo spoofing only.** The blink-based EAR check catches someone holding up a printed photo or a static image on a screen, but a **video replay attack** (playing a recording of the enrolled user blinking) would currently pass. Proper anti-spoofing (texture/depth analysis, challenge-response) is planned for v2.
-- **Threshold values are tuned to one person's face, camera, and lighting conditions.** They are a reasonable starting point, not a validated universal constant — recalibrate before relying on this for anyone else.
-- **No handling for extreme lighting or multiple simultaneous faces during authentication** (multi-face handling exists for enrollment data separation, not for rejecting bystanders during a live auth attempt).
-- **Reference set can be small.** Enrollment works with as few as one photo; more enrollment captures across different conditions (angles, lighting) will make the reference centroid more robust.
+- Computer Vision
+- Deep Learning
+- Linux Systems Programming
+- Authentication Systems
+
+Rather than building a standalone facial recognition application, the goal was to integrate a complete facial authentication pipeline directly into the Linux authentication framework using PAM.
 
 ---
 
-## Tech Stack
+## Disclaimer
 
-- **ML/CV:** PyTorch, `facenet-pytorch` (MTCNN, InceptionResnetV1), `mediapipe` (FaceLandmarker)
-- **Vision utilities:** OpenCV, Pillow
-- **Platform:** Linux (developed on CachyOS)
+FaceLock is intended for research and educational purposes.
+
+While it implements blink-based liveness detection and biometric verification, it has not undergone formal security auditing and should not be considered a replacement for enterprise-grade authentication solutions.

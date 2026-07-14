@@ -8,6 +8,9 @@ from facelock.liveness import check_liveness
 import torch
 import os
 import glob
+import logging 
+
+logger = logging.getLogger(__name__)
 
 def clear_dir(path):
     os.makedirs(path, exist_ok=True)
@@ -31,21 +34,22 @@ def enroll():
             print("Invalid.")
             return False
     
-    print(f"Capturing {FRAMES_PER_ATTEMPT} enrollment frames... please blink naturally.")
+    logger.info(f"Capturing {FRAMES_PER_ATTEMPT} enrollment frames... please blink naturally.")
     frames = capture_frames(FRAMES_PER_ATTEMPT)
     if not check_liveness(frames):
-        print("Enrollment failed — no blink detected. Please try again with a live face.")
+        logger.critical("Enrollment failed — no blink detected. Please try again with a live face.")
         return False
     
+    logger.debug("Getting average embeddings...")
     valid_emb = get_averaged_embedding(frames, min_valid=1)
     if valid_emb is None:
-        print("Enrollment failed — no face detected in any captured frame.")
+        logger.critical("Enrollment failed — no face detected in any captured frame.")
         return False
     if mode == "replace":
         clear_dir(REFERENCE_DIR)
     
     torch.save(valid_emb,f"{REFERENCE_DIR}/referance.pt")
-    print("Enrollment Successfull")
+    logger.info("Enrollment Successfull")
     return True 
 
 

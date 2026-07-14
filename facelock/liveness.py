@@ -3,6 +3,10 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 from facelock.config import FACE_LANDMARKER_MODEL_PATH,EAR_THRESHOLD
+from facelock.benchmark import BenchmarkTimer
+import logging 
+
+logger = logging.getLogger(__name__)
 
 
 # 6-point eye landmark indices from mediapipe's 468-point Face Mesh
@@ -10,13 +14,14 @@ from facelock.config import FACE_LANDMARKER_MODEL_PATH,EAR_THRESHOLD
 LEFT_EYE_IDX = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE_IDX = [33, 160, 158, 133, 153, 144]
 
-_base_options = mp_python.BaseOptions(model_asset_path=FACE_LANDMARKER_MODEL_PATH)
-_landmarker_options = mp_vision.FaceLandmarkerOptions(
-    base_options=_base_options,
-    running_mode=mp_vision.RunningMode.IMAGE,
-    num_faces=1,
-)
-_face_landmarker = mp_vision.FaceLandmarker.create_from_options(_landmarker_options)
+with BenchmarkTimer("MediaPipe initialization", logger):
+    _base_options = mp_python.BaseOptions(model_asset_path=FACE_LANDMARKER_MODEL_PATH)
+    _landmarker_options = mp_vision.FaceLandmarkerOptions(
+        base_options=_base_options,
+        running_mode=mp_vision.RunningMode.IMAGE,
+        num_faces=1,
+    )
+    _face_landmarker = mp_vision.FaceLandmarker.create_from_options(_landmarker_options)
 
 
 def _distance(p1, p2):
@@ -62,14 +67,14 @@ def check_liveness(images):
         ear_values.append((left_ear + right_ear) / 2.0)
 
     if len(ear_values) < 3:
-        print(f"Liveness check: only {len(ear_values)} usable frames — insufficient")
+        logger.critical(f"Liveness check: only {len(ear_values)} usable frames — insufficient")
         return False
 
-    print(f"EAR sequence: {[round(e, 3) for e in ear_values]}")
+    logger.debug(f"EAR sequence: {[round(e, 3) for e in ear_values]}")
 
     was_open = any(e > EAR_THRESHOLD for e in ear_values)
     was_closed = any(e <= EAR_THRESHOLD for e in ear_values)
 
     blinked = was_open and was_closed
-    print(f"Blink detected: {blinked}")
+    logger.info(f"Blink detected: {blinked}")
     return blinked

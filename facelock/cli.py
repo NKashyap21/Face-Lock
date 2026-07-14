@@ -1,12 +1,17 @@
 from typer import Typer,Exit
 from facelock.enroll  import enroll
 from facelock.authenticate import authenticate
-import sys
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+)
 
 app = Typer()
 
 @app.command()
-def enroll():
+def enroll_user():
     raise Exit(code=0 if enroll() else 1)
 
 @app.command()

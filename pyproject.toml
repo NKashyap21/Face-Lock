@@ -11,3 +11,5 @@ dependencies = [
     "pandas>=3.0.3",
     "typer>=0.26.8",
 ]
+[project.scripts]
+facelock = "facelock.cli:app"
