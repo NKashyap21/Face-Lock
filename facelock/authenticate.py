@@ -1,17 +1,15 @@
 from torch.nn.functional import cosine_similarity
-from helpers import (
+from facelock.config import (
     DEVICE,
     THRESHOLD,
     AMBIGUOUS_MARGIN,
     MAX_RESCANS,
     FRAMES_PER_ATTEMPT,
-    MIN_VALID_DETECTIONS,
-    clear_dir,
-    capture_frames,
-    get_averaged_embedding,
-    load_reference_embedding,
-    check_liveness
+    MIN_VALID_DETECTIONS
 )
+from facelock.camera import capture_frames
+from facelock.embeddings import get_averaged_embedding,load_reference_embedding
+from facelock.liveness import check_liveness
 
 
 def authenticate():
