@@ -5,20 +5,20 @@ from facelock.config import (
     AMBIGUOUS_MARGIN,
     MAX_RESCANS,
     FRAMES_PER_ATTEMPT,
-    MIN_VALID_DETECTIONS
+    MIN_VALID_DETECTIONS,
 )
 from facelock.camera import capture_frames
-from facelock.embeddings import get_averaged_embedding,load_reference_embedding
+from facelock.embeddings import get_averaged_embedding
 from facelock.liveness import check_liveness
 from facelock.benchmark import BenchmarkTimer
 import logging
 logger = logging.getLogger(__name__)
 
 
-def authenticate():
+def authenticate(REFERENCE_EMB):
     with BenchmarkTimer("Total authentication time", logger):
         with BenchmarkTimer("Loading reference embedding", logger):
-            ref_centroid = load_reference_embedding()
+            ref_centroid = REFERENCE_EMB
 
         attempt = 0
         while attempt <= MAX_RESCANS:

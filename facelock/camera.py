@@ -25,7 +25,7 @@ def capture_frames(num_frames):
         frames.append(img)
 
         count += 1
-        time.sleep(0.2)
+        time.sleep(0.1)
     logger.info(f"Generated {num_frames} frames.")
 
     cap.release()
