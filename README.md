@@ -1,232 +1,285 @@
-# FaceLock 
+# FaceLock
 
-<p align="center">
-  <img src="demo.gif" alt="FaceLock Demo" width="800">
-</p>
+FaceLock is a Linux facial authentication system that integrates with the Pluggable Authentication Modules (PAM) framework to provide passwordless authentication using face recognition.
 
-A Linux facial authentication system built using **FaceNet**, **MTCNN**, **MediaPipe**, and the **Linux PAM (Pluggable Authentication Modules)** framework.
+Unlike traditional implementations that load deep learning models on every authentication request, FaceLock runs as a persistent `systemd` daemon. The daemon keeps all machine learning models loaded in memory and communicates with PAM through a Unix domain socket, significantly reducing authentication latency.
 
-FaceLock provides secure biometric authentication through facial recognition with blink-based liveness detection and integrates directly into the Linux desktop login process.
+The project uses FaceNet for face embeddings, MTCNN for face detection, and MediaPipe Face Landmarker for blink-based liveness detection.
 
 ---
 
 ## Features
 
-- Face verification using FaceNet (InceptionResnetV1)
-- Face detection and alignment using MTCNN
-- Blink-based liveness detection using MediaPipe Face Landmarker
-- Multi-frame embedding aggregation for improved robustness
-- Linux CLI built with Typer
-- Integrated with Linux PAM for desktop authentication
-- Password fallback on failed authentication
-- Structured logging
-- Built-in performance benchmarking
+* Face recognition using FaceNet embeddings
+* Blink-based liveness detection
+* PAM integration for Linux authentication
+* Background daemon managed by `systemd`
+* Unix domain socket communication
+* Password fallback on authentication failure
+* Cached model loading for faster authentication
+* Modular architecture
 
 ---
 
-## Authentication Pipeline
+## Demo
 
-```
-                Webcam
-                   │
-                   ▼
-         Capture 20 RGB Frames
-                   │
-        ┌──────────┴──────────┐
-        ▼                     ▼
- MediaPipe             MTCNN + FaceNet
-Liveness Check          Face Embeddings
-        │                     │
-        └──────────┬──────────┘
-                   ▼
-        Average Face Embedding
-                   │
-                   ▼
-        Cosine Similarity Match
-                   │
-         ┌─────────┴─────────┐
-         │                   │
-     Match Found        Authentication Failed
-         │                   │
-         ▼                   ▼
- Linux PAM Success      Password Fallback
-```
+<p align="center">
+  <img src="demo.gif" alt="FaceLock Demo" width="700">
+</p>
 
 ---
 
-## Linux PAM Integration
+## Architecture
 
-FaceLock exposes a simple CLI:
-
-```bash
-facelock verify
+```text
+                    systemd
+                       │
+                       ▼
+              FaceLock Daemon
+                       │
+     ┌─────────────────┴─────────────────┐
+     │                                   │
+ Load FaceNet                     Load MediaPipe
+ Load MTCNN                       Load Reference Embedding
+     │
+     ▼
+Wait on Unix Domain Socket
+     │
+     ▼
+pam_exec (PAM)
+     │
+     ▼
+ PAM Client
+     │
+     ▼
+Authentication Request
+     │
+     ▼
+ Face Detection
+     │
+     ▼
+ Blink Verification
+     │
+     ▼
+ Face Embedding
+     │
+     ▼
+ Cosine Similarity
+     │
+     ▼
+ Authentication Result
 ```
-
-The command returns:
-
-| Exit Code | Meaning |
-|-----------|---------|
-| `0` | Authentication successful |
-| Non-zero | Authentication failed |
-
-The Linux PAM framework executes FaceLock using `pam_exec.so` during authentication.
-
-```
-User
- │
- ▼
-Plasma Login
- │
- ▼
-PAM
- │
- ▼
-pam_exec.so
- │
- ▼
-FaceLock CLI
- │
- ▼
-Face Verification
- │
- ▼
-Exit Code
- │
- ├── 0 → Login Successful
- └── 1 → Password Authentication
-```
-
-Authentication is initiated when the user starts the login process (e.g., pressing **Enter** on the Plasma Login screen).
-
----
-
-## Liveness Detection
-
-FaceLock performs blink-based liveness detection before facial verification.
-
-For every captured frame:
-
-- Detect facial landmarks using MediaPipe
-- Compute Eye Aspect Ratio (EAR)
-- Detect a valid blink sequence
-- Reject authentication if liveness verification fails
-
-This helps mitigate simple presentation attacks using photographs.
-
----
-
-## Multi-frame Recognition
-
-Instead of authenticating using a single image, FaceLock:
-
-1. Captures multiple frames
-2. Generates a FaceNet embedding for each frame
-3. Computes the average embedding
-4. Compares against the enrolled reference embedding
-
-This significantly improves robustness under:
-
-- Lighting variation
-- Minor pose changes
-- Camera noise
-- Facial expression changes
-
----
-
-## Performance
-
-Typical authentication timings on an Intel Core Ultra laptop:
-
-| Stage | Time |
-|--------|------|
-| Reference embedding loading | ~0.002 s |
-| Camera capture | ~4.36 s |
-| Liveness detection | ~0.38–0.80 s |
-| Face embedding generation | ~1.1–3.3 s |
-| Cosine similarity | <1 ms |
-| Total authentication | ~5.9–8.4 s |
-
----
-
-## CLI
-
-Enroll a new user:
-
-```bash
-facelock enroll
-```
-
-Verify identity:
-
-```bash
-facelock verify
-```
-
 
 ---
 
 ## Project Structure
 
-```
-facelock/
+```text
+Face-Lock/
 │
-├── cli.py
-├── authenticate.py
-├── enroll.py
-├── camera.py
-├── embeddings.py
-├── liveness.py
-├── storage.py
-├── config.py
+├── facelock/
+│   ├── authenticate.py
+│   ├── camera.py
+│   ├── daemon.py
+│   ├── embeddings.py
+│   ├── enroll.py
+│   ├── pam_client.py
+│   └── ...
 │
 ├── models/
 │   └── face_landmarker.task
 │
-└── storage/
+├── scripts/
+│   ├── install.sh
+│   ├── uninstall.sh
+│   └── facelock-pam
+│
+├── systemd/
+│   └── facelock.service
+│
+├── storage/
+├── README.md
+├── LICENSE
+├── pyproject.toml
+└── uv.lock
 ```
 
 ---
 
-## Technologies
+## Requirements
 
-- Python
-- PyTorch
-- FaceNet (InceptionResnetV1)
-- MTCNN
-- MediaPipe Face Landmarker
-- OpenCV
-- Typer
-- Linux PAM
-- NumPy
+* Linux
+* Python 3.11+
+* `systemd`
+* PAM
+* Webcam
+* `uv`
 
----
+Tested on:
 
-## Future Improvements
-
-- Persistent authentication daemon (`facelockd`) to eliminate model loading latency
-- Multi-user enrollment
-- Configurable authentication thresholds
-- Automatic benchmark mode
-- Wayland lock screen integration
-- Support for ArcFace / InsightFace backends
+* KDE Plasma (Plasma Login)
+* Arch Linux / CachyOS
 
 ---
 
-## Motivation
+## Installation
 
-FaceLock was developed to explore the intersection of:
+Clone the repository.
 
-- Computer Vision
-- Deep Learning
-- Linux Systems Programming
-- Authentication Systems
+```bash
+git clone https://github.com/NKashyap21/Face-Lock.git
+cd Face-Lock
+```
 
-Rather than building a standalone facial recognition application, the goal was to integrate a complete facial authentication pipeline directly into the Linux authentication framework using PAM.
+Run the installer.
+
+```bash
+sudo ./scripts/install.sh
+```
+
+The installer will:
+
+* Install the project under `/opt/facelock`
+* Install the `systemd` service
+* Install the PAM helper
+* Enable and start the daemon
 
 ---
 
-## Disclaimer
+## PAM Configuration
 
-FaceLock is intended for research and educational purposes.
+FaceLock integrates through PAM.
 
-While it implements blink-based liveness detection and biometric verification, it has not undergone formal security auditing and should not be considered a replacement for enterprise-grade authentication solutions.
+Add the following line **before**
+
+```pam
+auth include system-login
+```
+
+inside your login manager's PAM configuration.
+
+```pam
+auth sufficient pam_exec.so quiet /usr/local/bin/facelock-pam
+```
+
+For KDE Plasma Login this is typically:
+
+```text
+/etc/pam.d/plasmalogin
+```
+
+Different desktop environments may use different PAM service files.
+
+---
+
+## Enrolling a Face
+
+After installation, enroll a reference face.
+
+```bash
+uv --directory /opt/facelock run python -m facelock.enroll
+```
+
+The reference embedding will be stored locally and used for future authentication.
+
+---
+
+## Usage
+
+Check daemon status.
+
+```bash
+systemctl status facelock
+```
+
+View logs.
+
+```bash
+journalctl -u facelock -f
+```
+
+Restart the daemon.
+
+```bash
+sudo systemctl restart facelock
+```
+
+---
+
+## How It Works
+
+1. The FaceLock daemon starts automatically using `systemd`.
+2. FaceNet, MTCNN, MediaPipe, and the enrolled embedding are loaded once.
+3. The daemon waits for authentication requests on a Unix domain socket.
+4. During login, PAM invokes a lightweight client using `pam_exec`.
+5. The client requests authentication from the daemon.
+6. The daemon captures webcam frames.
+7. MTCNN detects the user's face.
+8. MediaPipe verifies liveness using blink detection.
+9. FaceNet generates a facial embedding.
+10. The embedding is compared against the enrolled reference embedding using cosine similarity.
+11. On success, PAM grants authentication. Otherwise, the normal password authentication process continues.
+
+---
+
+## Performance
+
+Loading deep learning models dominates the runtime of most facial authentication systems.
+
+FaceLock avoids repeatedly loading models by running as a persistent daemon. Authentication requests only perform face detection, liveness verification, embedding generation, and similarity comparison.
+
+Communication between PAM and the daemon is performed through a Unix domain socket, keeping the authentication path lightweight.
+
+---
+
+## Troubleshooting
+
+Verify that the daemon is running.
+
+```bash
+systemctl status facelock
+```
+
+Check daemon logs.
+
+```bash
+journalctl -u facelock -f
+```
+
+Verify that the Unix socket exists.
+
+```bash
+ls /run/facelock/
+```
+
+Re-enroll your face.
+
+```bash
+uv --directory /opt/facelock run python -m facelock.enroll
+```
+
+---
+
+## Known Limitations
+
+* Supports a single enrolled user.
+* Requires a webcam.
+* KDE Wallet may still prompt for its password after biometric login because `pam_kwallet5` does not receive the user's login password.
+* Some display managers invoke PAM only after the user initiates authentication (for example, by pressing Enter). In such environments, FaceLock starts when PAM authentication begins rather than when the greeter is first displayed.
+
+---
+
+## Future Work
+
+* Multi-user support
+* Adaptive authentication thresholds
+* Improved anti-spoofing techniques
+* Automatic embedding updates
+* Model optimization and quantization
+* Support for additional Linux display managers
+
+---
+
+## License
+
+This project is licensed under the MIT License.

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+exec /usr/bin/uv \
+    --directory "/opt/facelock" \
+    run python -m facelock.pam_client

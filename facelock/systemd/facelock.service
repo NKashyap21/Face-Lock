@@ -1,0 +1,21 @@
+[Unit]
+Description=FaceLock Authentication Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+
+WorkingDirectory=%h/Face-Lock
+ExecStart=/usr/bin/uv run python -m facelock.daemon
+
+Restart=on-failure
+RestartSec=3
+
+RuntimeDirectory=facelock
+RuntimeDirectoryMode=0755
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
